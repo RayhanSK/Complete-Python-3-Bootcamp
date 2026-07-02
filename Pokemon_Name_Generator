@@ -1,0 +1,340 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyPGFymhGp74fCwc4d7/mUZV",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/RayhanSK/Complete-Python-3-Bootcamp/blob/master/Pokemon_Name_Generator\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "JK_TTZEZWXZo"
+      },
+      "outputs": [],
+      "source": [
+        "import torch"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "WozHUhOXWkIB"
+      },
+      "execution_count": 12,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import re\n",
+        "import requests\n",
+        "from bs4 import BeautifulSoup\n",
+        "\n",
+        "url = \"https://pokemondb.net/pokedex/national\"\n",
+        "html = requests.get(url).text\n",
+        "soup = BeautifulSoup(html, \"html.parser\")\n",
+        "\n",
+        "pokemon_names = []\n",
+        "\n",
+        "for a in soup.select(\"a.ent-name\"):\n",
+        "    name = a.text.lower()\n",
+        "\n",
+        "    # keep only letters a-z\n",
+        "    name = re.sub(r'[^a-z]', '', name)\n",
+        "\n",
+        "    if name:\n",
+        "        pokemon_names.append(name)\n",
+        "\n",
+        "# remove duplicates while preserving order\n",
+        "pokemon_names = list(dict.fromkeys(pokemon_names))\n"
+      ],
+      "metadata": {
+        "id": "G2V2gBMnibTj"
+      },
+      "execution_count": 25,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "chars=sorted(list(set(''.join(pokemon_names)))) #creating a set of all the characters in my dataset which will be a-z\n",
+        "stoi={s:i+1 for i,s in enumerate(chars)} #stoi is a dictionary that stores the char as key and its corressponding value, eg. a:1,b:2,c:3,etc\n",
+        "stoi['.']=0\n",
+        "itos={i:s for s,i in stoi.items()} #itos is like stoi but key and values are interchanged, 1:a,2:b,etc\n",
+        "\n",
+        "import random\n",
+        "random.seed(42)\n",
+        "random.shuffle(pokemon_names)\n",
+        "\n",
+        "\n",
+        "n1 = int(0.8*len(pokemon_names))\n",
+        "n2 = int(0.9*len(pokemon_names))\n",
+        "block_size=3\n",
+        "def build_dataset(pokemon_names):\n",
+        "  X,Y=[],[]\n",
+        "  for w in pokemon_names:\n",
+        "      context=[0]*block_size\n",
+        "      for ch in w+'.':\n",
+        "          ix=stoi[ch]\n",
+        "          X.append(context)\n",
+        "          Y.append(ix)\n",
+        "          context=context[1:]+[ix]\n",
+        "  return torch.tensor(X),torch.tensor(Y)\n",
+        "  X,Y=build_dataset(pokemon_names[:n1])\n",
+        "#carrying this loop on till the end of \"lol\" well have X,Y like this:\n",
+        "#ch = lol+\".\" = lol.\n",
+        "#for l - ix=12, context=[0,0,0],X=[[0,0,0]] , Y=[12]\n",
+        "#for o - ix=15, context=[0,0,12],X=[[0,0,0],[0,0,12]] , Y=[12,15]\n",
+        "#for l - ix=12, context=[0,12,15],X=[[0,0,0],[0,0,12],[0,12,15]] , Y=[12,15,12]\n",
+        "#for . - ix=0,context=[12,15,12],X=[[0,0,0],[0,0,12],[0,12,15],[12,15,12]] , Y=[12,15,12,0]\n",
+        "#this is just used for every name to train the model about what would mostly come next if these 3 letters are together, it doesnt give the model a definitive answer as the model using sampling and probabiltity while generating names\n",
+        "#creating tensors of x and y so that we can use pytorch to code and make our neural network\n",
+        "Xtr, Ytr = build_dataset(pokemon_names[:n1])      # 80% train\n",
+        "Xdev, Ydev = build_dataset(pokemon_names[n1:n2])  # 10% dev\n",
+        "Xte, Yte = build_dataset(pokemon_names[n2:]) # 10% test\n",
+        "print(Xtr.shape, Xdev.shape, Xte.shape)\n",
+        "print(Ytr.shape, Ydev.shape, Yte.shape)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "oAk-giOZW6ub",
+        "outputId": "06f2d084-0634-40f5-e5eb-39887d311d3b"
+      },
+      "execution_count": 26,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "torch.Size([7005, 3]) torch.Size([909, 3]) torch.Size([912, 3])\n",
+            "torch.Size([7005]) torch.Size([909]) torch.Size([912])\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "n=len(stoi) #28\n",
+        "dim=6 # we want each character like 'a' be a vector of dim dimensions like [0.1,0.5,0.64,...], if we only train it on one dimension like a=1 or b=2, we dont want the model to learn that b>a so we do this\n",
+        "g=torch.Generator().manual_seed(2147483647) #we use a manual seed here to get the same output of g every single time we run any code related to g\n",
+        "C=torch.randn((n,dim),generator=g) #C is a randomly allocated matrix of 28xdim where each 28 rows have 10 columns of random numbers\n",
+        "emb=C[Xtr] #this basically creates emb of a matrix of shape 1638 x 3 x dim\n",
+        "emb_cat=torch.cat(torch.unbind(emb,1),1) #this is simply just making the first row of emb from [1,2,3,4..],[5,6,7,8...] to [1,2,3,4,5,6,7,8..].\n",
+        "\n",
+        "print(emb.shape)\n",
+        "print(emb_cat.shape) # 1638 x (3 times dim)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "mwyaaKNneaqy",
+        "outputId": "863ffcd4-aaa5-4e6c-8898-01d24f44016b"
+      },
+      "execution_count": 27,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "torch.Size([7005, 3, 6])\n",
+            "torch.Size([7005, 18])\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "n_hidden=32 #hidden layer neurons\n",
+        "W1=torch.randn(block_size*dim,n_hidden,generator=g) #we want n_hidden columns (visualise 100 neurons in a neural network in a column) and and since we have emb_cat having 1638 x 30 or 30 inputs for each row we need 30 x ... for W1 so matrix multiplication works\n",
+        "b1=torch.randn(n_hidden,generator=g)\n",
+        "W2=torch.randn(n_hidden,n,generator=g) #n_hiddenx28 cuz we want 27 neurons each giving us a score of the possiblility that the next character is one of the 27 possible characters\n",
+        "b2=torch.rand(n,generator=g)\n",
+        "print(W1.shape)\n",
+        "print(b1.shape)\n",
+        "print(W2.shape)\n",
+        "print(b2.shape)\n",
+        "parameters=[C,W1,b1,W2,b2]\n"
+      ],
+      "metadata": {
+        "id": "9MF41_CqXCKF",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "b6144415-ab13-4bf8-8de3-a5248ad2e3e7"
+      },
+      "execution_count": 28,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "torch.Size([18, 32])\n",
+            "torch.Size([32])\n",
+            "torch.Size([32, 27])\n",
+            "torch.Size([27])\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#putting it all together!\n",
+        "import torch.nn.functional as F\n",
+        "for p in parameters:\n",
+        "    p.requires_grad = True #used for making sure gradient is tracked during back propogation\n",
+        "lr=0.5 #how big of a step we should take while making the model learn\n",
+        "steps=10000 #gradient descent will happen 10000 times to learn\n",
+        "batch_size=32\n",
+        "for i in range(steps):\n",
+        "  ix=torch.randint(0,Xtr.shape[0],(batch_size,),generator=g) #takes 32 random rows from 0 to 1638 possible rows\n",
+        "  emb=C[Xtr[ix]] #same as emb=C[ix] but for the 32 selected rows\n",
+        "  emb_cat=torch.cat(torch.unbind(emb,1),1)\n",
+        "  h=torch.tanh(emb_cat @ W1 + b1) # we use a tanh function to squash every output bw -1 and 1\n",
+        "  logits = h @ W2 + b2\n",
+        "  loss = F.cross_entropy(logits, Ytr[ix]) # A shortcut to calculate loss by making the logits from values to probabilites of that character occuring and comparing it with the correct answer or Y[ix]\n",
+        "  '''\n",
+        "  Another way you can do instead of cross_entropy\n",
+        "  counts = logits.exp()\n",
+        "  probs = counts / counts.sum(1, keepdim=True)\n",
+        "  loss = -probs[torch.arange(batch_size), Y].log().mean()'''\n",
+        "  lr = 0.1 if i < 6000 else 0.01 #changing the learning rate from 0.1 to 0.01 is called learning decay and is done because at the later stages of training a model we want a smaller learning rate so it learns more smoother not a large one\n",
+        "  for p in parameters:\n",
+        "    p.grad=None #you want to reset your gradient after each step not accumulate them\n",
+        "  loss.backward() #performs backprop\n",
+        "  for p in parameters:\n",
+        "      p.data += -lr * p.grad #used to update data values based on gradient and learning rate after back propogation\n",
+        "\n",
+        "  if i % 1000 == 0:\n",
+        "     with torch.no_grad():\n",
+        "            emb_dev = C[Xdev]\n",
+        "            h_dev = torch.tanh(emb_dev.view(emb_dev.shape[0], -1) @ W1 + b1)\n",
+        "            logits_dev = h_dev @ W2 + b2\n",
+        "            dev_loss = F.cross_entropy(logits_dev, Ydev)\n",
+        "    #if train loss keeps dropping but dev loss stalls or rises, that's overfitting — the model is memorizing training names rather than learning general spelling patterns.\n",
+        "     print(f\"step {i}: train {loss.item():.4f}  dev {dev_loss.item():.4f}\")\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "1e9pXvrI2S_X",
+        "outputId": "613a690b-e871-4f69-8d15-41b78ffc1930"
+      },
+      "execution_count": 29,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "step 0: train 11.6411  dev 10.9912\n",
+            "step 1000: train 2.9404  dev 3.0108\n",
+            "step 2000: train 2.7325  dev 2.7917\n",
+            "step 3000: train 2.7094  dev 2.7095\n",
+            "step 4000: train 2.3921  dev 2.6767\n",
+            "step 5000: train 2.4313  dev 2.6801\n",
+            "step 6000: train 2.5834  dev 2.6741\n",
+            "step 7000: train 2.1337  dev 2.6349\n",
+            "step 8000: train 2.6142  dev 2.6370\n",
+            "step 9000: train 2.5983  dev 2.6288\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "g_sample = torch.Generator().manual_seed(42)\n",
+        "\n",
+        "for _ in range(20):\n",
+        "    out = []\n",
+        "    context = [0] * block_size\n",
+        "    while True:\n",
+        "        emb = C[torch.tensor([context])]\n",
+        "        h = torch.tanh(emb.view(1, -1) @ W1 + b1)\n",
+        "        logits = h @ W2 + b2\n",
+        "        probs = F.softmax(logits, dim=1)\n",
+        "        ix = torch.multinomial(probs, num_samples=1, generator=g_sample).item()\n",
+        "        context = context[1:] + [ix]\n",
+        "        if ix == 0:\n",
+        "            break\n",
+        "        out.append(itos[ix])\n",
+        "    print(''.join(out))\n",
+        "    # here 6 names out of 20 are from memorization and the others are generated which is pretty good so far"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "X3cRUwX8VpjZ",
+        "outputId": "21ab5dee-d439-45a6-f685-ec7ae4c73c03"
+      },
+      "execution_count": 30,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "cauguon\n",
+            "tis\n",
+            "fari\n",
+            "sedxilusharsilashel\n",
+            "ormancorvan\n",
+            "epichendeglemzu\n",
+            "bepong\n",
+            "kedoc\n",
+            "bull\n",
+            "ranthetalbacvawigea\n",
+            "salcovtint\n",
+            "tugelimas\n",
+            "tal\n",
+            "seltto\n",
+            "dun\n",
+            "cobrentanniro\n",
+            "gerel\n",
+            "gurf\n",
+            "paliewo\n",
+            "liljapm\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "6xg4KWlubjmq"
+      },
+      "execution_count": 7,
+      "outputs": []
+    }
+  ]
+}
